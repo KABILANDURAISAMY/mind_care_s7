@@ -21,4 +21,7 @@ router.get("/assessment/questions", ctrl.getAssessmentQuestions);
 router.post("/assessment", ctrl.submitAssessment);
 router.get("/assessment-history", ctrl.getAssessmentHistory);
 
+router.post("/feedback", ctrl.submitFeedback);
+router.get("/pending-feedback", ctrl.getPendingFeedback);
+
 module.exports = router;

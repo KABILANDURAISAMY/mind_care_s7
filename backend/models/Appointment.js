@@ -26,6 +26,7 @@ const appointmentSchema = new mongoose.Schema(
 
     cancelledAt: { type: Date, default: null },
     cancellationReason: { type: String, default: "" },
+    cancelledBy: { type: String, enum: ["student", "counsellor", null], default: null },
   },
   { timestamps: true }
 );

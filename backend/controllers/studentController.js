@@ -3,6 +3,8 @@ const Counsellor = require("../models/Counsellor");
 const Availability = require("../models/Availability");
 const Appointment = require("../models/Appointment");
 const Assessment = require("../models/Assessment");
+const Feedback = require("../models/Feedback");
+const { ensureDefaultSlots } = require("../utils/defaultSlots");
 const { WELLNESS_QUESTIONS } = require("../utils/wellnessQuestions");
 const { combineDateTime, isNonEmptyString } = require("../utils/validators");
 const { sendEmail, templates } = require("../services/emailService");
@@ -44,6 +46,10 @@ const listCounsellors = async (req, res, next) => {
 const getAvailability = async (req, res, next) => {
   try {
     const { counsellorId, date } = req.query;
+    
+    // Ensure default 4 slots exist for counsellors
+    await ensureDefaultSlots(counsellorId || null);
+
     const filter = { status: "available" };
     if (counsellorId) filter.counsellorId = counsellorId;
     if (date) filter.date = date;
@@ -292,6 +298,74 @@ const getAssessmentHistory = async (req, res, next) => {
   }
 };
 
+/* ------------------------------------------------------------------ */
+/* Session Feedback                                                   */
+/* ------------------------------------------------------------------ */
+
+// POST /api/student/feedback
+const submitFeedback = async (req, res, next) => {
+  try {
+    const student = await Student.findOne({ userId: req.user._id });
+    if (!student) return res.status(404).json({ message: "Student profile not found." });
+
+    const { appointmentId, rating, comment } = req.body;
+    if (!appointmentId || !rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: "Appointment ID and a valid rating (1-5) are required." });
+    }
+
+    const appointment = await Appointment.findOne({ _id: appointmentId, studentId: student._id });
+    if (!appointment) return res.status(404).json({ message: "Appointment not found." });
+
+    if (appointment.status !== "Completed") {
+      return res.status(400).json({ message: "Feedback can only be submitted for completed sessions." });
+    }
+
+    const existing = await Feedback.findOne({ appointmentId });
+    if (existing) {
+      return res.status(409).json({ message: "Feedback has already been submitted for this session." });
+    }
+
+    const feedback = await Feedback.create({
+      appointmentId: appointment._id,
+      studentId: student._id,
+      counsellorId: appointment.counsellorId,
+      rating: Number(rating),
+      comment: comment || "",
+    });
+
+    res.status(201).json({ message: "Thank you for your feedback!", feedback });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/student/pending-feedback
+const getPendingFeedback = async (req, res, next) => {
+  try {
+    const student = await Student.findOne({ userId: req.user._id });
+    if (!student) return res.status(404).json({ message: "Student profile not found." });
+
+    const completedAppts = await Appointment.find({
+      studentId: student._id,
+      status: "Completed",
+    })
+      .populate("counsellorId", "name specialization")
+      .sort({ date: -1 });
+
+    if (!completedAppts.length) return res.json([]);
+
+    const apptIds = completedAppts.map((a) => a._id);
+    const existingFeedbacks = await Feedback.find({ appointmentId: { $in: apptIds } });
+    const submittedApptIds = new Set(existingFeedbacks.map((f) => f.appointmentId.toString()));
+
+    const pending = completedAppts.filter((a) => !submittedApptIds.has(a._id.toString()));
+
+    res.json(pending);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getProfile,
   listCounsellors,
@@ -302,4 +376,6 @@ module.exports = {
   getAssessmentQuestions,
   submitAssessment,
   getAssessmentHistory,
+  submitFeedback,
+  getPendingFeedback,
 };

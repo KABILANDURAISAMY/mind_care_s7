@@ -55,9 +55,37 @@ const LandingPage = () => {
           <div className="relative flex h-80 items-center justify-center md:h-[26rem]" aria-hidden="true">
             <div className="absolute h-64 w-64 animate-breatheOuter rounded-full bg-sage md:h-80 md:w-80" />
             <div className="absolute h-48 w-48 animate-breathe rounded-full bg-sage-light/70 md:h-60 md:w-60" />
-            <div className="relative flex h-36 w-36 flex-col items-center justify-center rounded-full bg-pine shadow-soft md:h-44 md:w-44">
-              <span className="font-display text-3xl font-semibold text-mist md:text-4xl">72</span>
-              <span className="font-body text-xs tracking-wide text-mist/70">wellness score</span>
+            <div className="relative flex h-36 w-36 flex-col items-center justify-center rounded-full bg-pine p-4 shadow-soft md:h-44 md:w-44">
+              <svg viewBox="0 0 100 100" className="h-20 w-20 md:h-24 md:w-24 text-sunrise" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* Left Hemisphere */}
+                <path
+                  d="M48 20C40 20 32 24 28 30C22 30 16 35 16 42C16 46 18 50 21 53C17 58 17 66 22 72C27 77 35 78 40 76C43 78 46 80 48 80V20Z"
+                  stroke="#D9A441"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="rgba(217, 164, 65, 0.15)"
+                />
+                {/* Right Hemisphere */}
+                <path
+                  d="M52 20C60 20 68 24 72 30C78 30 84 35 84 42C84 46 82 50 79 53C83 58 83 66 78 72C73 77 65 78 60 76C57 78 54 80 52 80V20Z"
+                  stroke="#D9A441"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="rgba(217, 164, 65, 0.15)"
+                />
+                {/* Brain fold details / Neural pathways */}
+                <path d="M28 30C34 34 38 42 36 50C34 58 40 66 48 68" stroke="#F2F4EF" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+                <path d="M72 30C66 34 62 42 64 50C66 58 60 66 52 68" stroke="#F2F4EF" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+                <path d="M48 20V80" stroke="#D9A441" strokeWidth="2" strokeDasharray="3 3" />
+                {/* Synapse nodes */}
+                <circle cx="36" cy="42" r="3" fill="#D9A441" />
+                <circle cx="64" cy="42" r="3" fill="#D9A441" />
+                <circle cx="28" cy="58" r="2.5" fill="#F2F4EF" />
+                <circle cx="72" cy="58" r="2.5" fill="#F2F4EF" />
+              </svg>
+              <span className="mt-1 font-body text-xs font-semibold tracking-wide text-mist/90">MindCare</span>
             </div>
           </div>
         </div>

@@ -3,7 +3,10 @@ const Student = require("../models/Student");
 const Availability = require("../models/Availability");
 const Appointment = require("../models/Appointment");
 const Assessment = require("../models/Assessment");
+const Feedback = require("../models/Feedback");
+const { ensureDefaultSlots } = require("../utils/defaultSlots");
 const { isValidDate, isValidTime } = require("../utils/validators");
+const { sendEmail } = require("../services/emailService");
 
 /* ------------------------------------------------------------------ */
 /* Profile & dashboard                                                 */
@@ -86,6 +89,8 @@ const listAvailability = async (req, res, next) => {
   try {
     const counsellor = await Counsellor.findOne({ userId: req.user._id });
     if (!counsellor) return res.status(404).json({ message: "Counsellor profile not found." });
+
+    await ensureDefaultSlots(counsellor._id);
 
     const slots = await Availability.find({ counsellorId: counsellor._id }).sort({ date: 1, startTime: 1 });
     res.json(slots);
@@ -226,6 +231,82 @@ const getStudentAssessments = async (req, res, next) => {
   }
 };
 
+/* ------------------------------------------------------------------ */
+/* Counsellor Cancellation & Student Feedback                         */
+/* ------------------------------------------------------------------ */
+
+// PUT /api/counsellor/appointments/:id/cancel
+const cancelCounsellorAppointment = async (req, res, next) => {
+  try {
+    const counsellor = await Counsellor.findOne({ userId: req.user._id });
+    if (!counsellor) return res.status(404).json({ message: "Counsellor profile not found." });
+
+    const appointment = await Appointment.findOne({ _id: req.params.id, counsellorId: counsellor._id });
+    if (!appointment) return res.status(404).json({ message: "Appointment not found." });
+
+    if (appointment.status !== "Booked") {
+      return res.status(400).json({ message: `Appointment is already ${appointment.status.toLowerCase()}.` });
+    }
+
+    const { reason } = req.body;
+    const apologyNote = reason || "Counsellor was unavailable due to an unexpected scheduling conflict. We sincerely apologize for the inconvenience.";
+
+    appointment.status = "Cancelled";
+    appointment.cancelledBy = "counsellor";
+    appointment.cancelledAt = new Date();
+    appointment.cancellationReason = apologyNote;
+    await appointment.save();
+
+    // Release slot so alternate booking or open status is handled
+    await Availability.findByIdAndUpdate(appointment.availabilityId, { $set: { status: "available" } });
+
+    const student = await Student.findById(appointment.studentId);
+    if (student) {
+      sendEmail({
+        to: student.email,
+        subject: "Appointment Cancelled - Alternate Slots Available",
+        text: `Dear ${student.name},\n\nWe sincerely apologize! Your appointment scheduled for ${appointment.date} at ${appointment.time} with ${counsellor.name} has been cancelled.\n\nReason/Note: ${apologyNote}\n\nPlease visit your MindCare dashboard to book an alternate session.\n\nWarm regards,\nMindCare Team`,
+      });
+    }
+
+    res.json({ message: "Appointment cancelled successfully and student notified.", appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/counsellor/feedbacks
+const getCounsellorFeedbacks = async (req, res, next) => {
+  try {
+    const counsellor = await Counsellor.findOne({ userId: req.user._id });
+    if (!counsellor) return res.status(404).json({ message: "Counsellor profile not found." });
+
+    const feedbacks = await Feedback.find({ counsellorId: counsellor._id })
+      .populate("studentId", "name department rollNumber")
+      .populate("appointmentId", "date time issue")
+      .sort({ createdAt: -1 });
+
+    const total = feedbacks.length;
+    const averageRating = total
+      ? (feedbacks.reduce((sum, f) => sum + f.rating, 0) / total).toFixed(1)
+      : "0.0";
+
+    const ratingCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    feedbacks.forEach((f) => {
+      if (ratingCounts[f.rating] !== undefined) ratingCounts[f.rating]++;
+    });
+
+    res.json({
+      feedbacks,
+      totalFeedbacks: total,
+      averageRating: parseFloat(averageRating),
+      ratingCounts,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getProfile,
   getDashboardSummary,
@@ -238,4 +319,6 @@ module.exports = {
   getStudentDetail,
   getStudentAppointmentHistory,
   getStudentAssessments,
+  cancelCounsellorAppointment,
+  getCounsellorFeedbacks,
 };

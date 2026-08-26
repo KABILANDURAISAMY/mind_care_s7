@@ -17,6 +17,8 @@ router.delete("/availability/:id", ctrl.removeAvailability);
 
 router.get("/appointments", ctrl.getAppointments);
 router.put("/appointments/:id/status", ctrl.updateAppointmentStatus);
+router.put("/appointments/:id/cancel", ctrl.cancelCounsellorAppointment);
+router.get("/feedbacks", ctrl.getCounsellorFeedbacks);
 
 router.get("/students", ctrl.listStudents);
 router.get("/student/:id", ctrl.getStudentDetail);

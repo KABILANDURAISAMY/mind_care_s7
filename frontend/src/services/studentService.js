@@ -10,3 +10,7 @@ export const cancelAppointment = (id, reason) => api.put(`/student/cancel/${id}`
 export const getAssessmentQuestions = () => api.get("/student/assessment/questions").then((r) => r.data);
 export const submitAssessment = (responses) => api.post("/student/assessment", { responses }).then((r) => r.data);
 export const getAssessmentHistory = () => api.get("/student/assessment-history").then((r) => r.data);
+
+export const submitFeedback = (appointmentId, rating, comment) =>
+  api.post("/student/feedback", { appointmentId, rating, comment }).then((r) => r.data);
+export const getPendingFeedback = () => api.get("/student/pending-feedback").then((r) => r.data);

@@ -15,3 +15,7 @@ export const listStudents = () => api.get("/counsellor/students").then((r) => r.
 export const getStudentDetail = (id) => api.get(`/counsellor/student/${id}`).then((r) => r.data);
 export const getStudentHistory = (id) => api.get(`/counsellor/student/${id}/history`).then((r) => r.data);
 export const getStudentAssessments = (id) => api.get(`/counsellor/student/${id}/assessments`).then((r) => r.data);
+
+export const cancelCounsellorAppointment = (id, reason) =>
+  api.put(`/counsellor/appointments/${id}/cancel`, { reason }).then((r) => r.data);
+export const getCounsellorFeedbacks = () => api.get("/counsellor/feedbacks").then((r) => r.data);
