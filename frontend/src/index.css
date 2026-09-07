@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  ::selection {
+    background-color: #d9a441;
+    color: #1f3d3b;
+  }
+  /* Visible keyboard focus everywhere, per accessibility floor. */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #d9a441;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-sunrise px-6 py-3 font-body font-semibold text-pine-dark shadow-soft transition hover:bg-sunrise-light active:scale-[0.98];
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-pine px-6 py-3 font-body font-semibold text-pine transition hover:bg-pine hover:text-mist active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 font-body font-medium text-pine/80 transition hover:bg-pine/5;
+  }
+  .card {
+    @apply rounded-2xl border border-pine/10 bg-white p-6 shadow-card;
+  }
+  .input-field {
+    @apply w-full rounded-xl border border-pine/15 bg-mist px-4 py-3 font-body text-ink placeholder:text-ink/40 transition focus:border-sunrise focus:bg-white focus:outline-none;
+  }
+  .label-field {
+    @apply mb-1.5 block font-body text-sm font-medium text-pine;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
