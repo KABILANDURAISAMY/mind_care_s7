@@ -26,7 +26,7 @@ const Counsellors = () => {
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-pine font-display text-lg font-semibold text-mist">
                 {c.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
               </div>
-              <h3 className="font-display text-lg font-semibold text-pine">{c.name}</h3>
+              <h3 className="font-display text-lg font-semibold text-pine">{c.title ? `${c.title} ${c.name}` : c.name}</h3>
               <p className="mt-0.5 font-body text-sm font-medium text-sage-dark">{c.specialization}</p>
 
               <dl className="mt-4 space-y-1.5 font-body text-sm text-ink/65">

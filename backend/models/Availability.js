@@ -10,7 +10,11 @@ const availabilitySchema = new mongoose.Schema(
     date: { type: String, required: true }, // stored as YYYY-MM-DD for simple, unambiguous comparison
     startTime: { type: String, required: true }, // stored as HH:mm (24hr)
     endTime: { type: String, required: true },
-    status: { type: String, enum: ["available", "booked"], default: "available" },
+    status: {
+      type: String,
+      enum: ["available", "booked", "completed", "expired", "cancelled", "removed"],
+      default: "available",
+    },
   },
   { timestamps: true }
 );

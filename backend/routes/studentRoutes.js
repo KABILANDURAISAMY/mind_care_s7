@@ -1,6 +1,6 @@
 const express = require("express");
 const protect = require("../middleware/authMiddleware");
-const requireRole = require("../middleware/roleMiddleware");
+const { requireRole } = require("../middleware/roleMiddleware");
 const ctrl = require("../controllers/studentController");
 
 const router = express.Router();
@@ -23,5 +23,11 @@ router.get("/assessment-history", ctrl.getAssessmentHistory);
 
 router.post("/feedback", ctrl.submitFeedback);
 router.get("/pending-feedback", ctrl.getPendingFeedback);
+
+router.get("/notifications", ctrl.getUnreadNotifications);
+router.put("/notifications/:id/dismiss", ctrl.dismissNotification);
+router.put("/dismiss-cancellation/:id", ctrl.dismissCancellation);
+
+router.post("/qa-assistant", ctrl.qaAssistant);
 
 module.exports = router;

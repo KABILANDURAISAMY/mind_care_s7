@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const dns = require("dns");
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 // Configure public DNS servers to resolve MongoDB Atlas SRV records
 // on systems where local DNS returns ECONNREFUSED for SRV queries.
@@ -10,6 +12,23 @@ try {
 }
 
 let memoryServer = null;
+
+/**
+ * Sanitizes MongoDB connection URI by removing placeholder angle brackets around passwords/usernames.
+ * e.g., mongodb+srv://user:<password>@cluster -> mongodb+srv://user:password@cluster
+ */
+function sanitizeMongoUri(uri) {
+  if (!uri) return uri;
+  // If string contains :<password>@ or similar angle brackets
+  let sanitized = uri.replace(/:\s*<([^>]+)>\s*@/, ":$1@");
+  // Remove any remaining angle brackets in user info portion
+  const match = sanitized.match(/^(mongodb(?:\+srv)?:\/\/[^@]+@)(.+)$/);
+  if (match) {
+    const credentials = match[1].replace(/<([^>]+)>/g, "$1");
+    sanitized = credentials + match[2];
+  }
+  return sanitized.trim();
+}
 
 const checkAndAutoSeed = async () => {
   try {
@@ -33,23 +52,28 @@ const checkAndAutoSeed = async () => {
  */
 const connectDB = async () => {
   const connectionOptions = {
-    serverSelectionTimeoutMS: 2500,
+    serverSelectionTimeoutMS: 3000,
   };
 
-  const primaryUri = process.env.MONGO_URI;
+  const rawPrimaryUri = process.env.MONGO_URI;
+  const primaryUri = sanitizeMongoUri(rawPrimaryUri);
   const localUri = "mongodb://127.0.0.1:27017/mindcare";
-  let connected = false;
 
   // Attempt 1: Configured MONGO_URI (if provided)
   if (primaryUri) {
     try {
-      console.log(`[DB] Attempting connection to configured MONGO_URI...`);
+      const maskedUri = primaryUri.replace(/:([^@]+)@/, ":****@");
+      console.log(`[DB] Attempting connection to configured MONGO_URI (${maskedUri})...`);
       const conn = await mongoose.connect(primaryUri, connectionOptions);
       console.log(`[DB] Connected successfully to MongoDB: ${conn.connection.host}/${conn.connection.name}`);
       await checkAndAutoSeed();
       return conn;
     } catch (error) {
-      console.warn(`[DB] Primary MONGO_URI connection failed (${error.message}).`);
+      if (error.message.includes("bad auth")) {
+        console.warn(`[DB Warning] MongoDB Atlas authentication failed (bad auth). Please verify username/password in backend/.env.`);
+      } else {
+        console.warn(`[DB Warning] Primary MONGO_URI connection failed (${error.message}).`);
+      }
     }
   }
 
@@ -62,7 +86,7 @@ const connectDB = async () => {
       await checkAndAutoSeed();
       return conn;
     } catch (error) {
-      console.warn(`[DB] Local MongoDB connection failed (${error.message}).`);
+      console.warn(`[DB Warning] Local MongoDB connection failed (${error.message}).`);
     }
   }
 
@@ -76,11 +100,11 @@ const connectDB = async () => {
     });
     const memoryUri = memoryServer.getUri();
     const conn = await mongoose.connect(memoryUri);
-    console.log(`[DB] Successfully started & connected to In-Memory MongoDB Server at: ${memoryUri}`);
+    console.log(`[DB Fallback] Successfully started & connected to In-Memory MongoDB Server at: ${memoryUri}`);
     await checkAndAutoSeed();
     return conn;
   } catch (memError) {
-    console.error(`[DB] All MongoDB connection attempts failed.`);
+    console.error(`[DB Error] All MongoDB connection attempts failed.`);
     console.error(`Error details: ${memError.message}`);
     process.exit(1);
   }

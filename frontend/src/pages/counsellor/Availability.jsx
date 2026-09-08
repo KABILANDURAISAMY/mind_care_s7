@@ -35,12 +35,20 @@ const Availability = () => {
   };
 
   const handleRemove = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this slot?")) {
+      return;
+    }
     setError("");
+    setSuccess("");
+    // Optimistically remove from UI for instant response
+    setSlots((prev) => (prev || []).filter((s) => s._id !== id));
     try {
       await removeAvailability(id);
+      setSuccess("Slot removed successfully.");
       load();
     } catch (err) {
       setError(err.response?.data?.message || "Could not remove this slot.");
+      load();
     }
   };
 
@@ -52,8 +60,8 @@ const Availability = () => {
       <div className="grid gap-6 lg:grid-cols-3">
         <form onSubmit={handleAdd} className="card lg:col-span-1">
           <h2 className="mb-4 font-display text-lg font-semibold text-pine">Add a slot</h2>
-          {error && <Banner type="error">{error}</Banner>}
-          {success && <Banner type="success">{success}</Banner>}
+          {error && <Banner type="error" onClose={() => setError("")}>{error}</Banner>}
+          {success && <Banner type="success" onClose={() => setSuccess("")}>{success}</Banner>}
 
           <label className="label-field">Date</label>
           <input type="date" name="date" required value={form.date} onChange={handleChange} className="input-field" />
@@ -83,7 +91,7 @@ const Availability = () => {
                     <p className="font-body text-sm font-semibold text-pine">{s.date}</p>
                     <p className="font-body text-xs text-ink/60">{s.startTime} – {s.endTime}</p>
                     <button onClick={() => handleRemove(s._id)} className="mt-1 self-start font-body text-xs font-semibold text-red-600 hover:underline">
-                      Remove
+                      Remove Slot
                     </button>
                   </div>
                 ))}
@@ -96,11 +104,26 @@ const Availability = () => {
             {booked.length === 0 ? (
               <p className="font-body text-sm text-ink/50">Nothing booked yet.</p>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {booked.map((s) => (
-                  <div key={s._id} className="rounded-xl border border-sage/30 bg-sage-light/20 px-3 py-3">
-                    <p className="font-body text-sm font-semibold text-pine">{s.date}</p>
-                    <p className="font-body text-xs text-ink/60">{s.startTime} – {s.endTime}</p>
+                  <div key={s._id} className="rounded-xl border border-sage/40 bg-sage-light/20 p-3.5 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="font-body text-sm font-semibold text-pine">{s.date}</p>
+                      <span className="rounded-full bg-sage/30 px-2.5 py-0.5 font-body text-[10px] font-bold text-sage-dark uppercase">
+                        Booked
+                      </span>
+                    </div>
+                    <p className="font-body text-xs text-ink/70 font-medium">{s.startTime} – {s.endTime}</p>
+                    
+                    {s.bookingDetails ? (
+                      <div className="mt-2 pt-2 border-t border-sage/20 font-body text-xs text-ink/80 space-y-0.5">
+                        <p className="font-semibold text-pine">👤 {s.bookingDetails.studentName}</p>
+                        <p className="text-ink/60">🎓 {s.bookingDetails.department} · Roll: {s.bookingDetails.rollNumber}</p>
+                        <p className="text-ink/70 italic">📌 "{s.bookingDetails.issue}"</p>
+                      </div>
+                    ) : (
+                      <p className="mt-1 font-body text-xs text-ink/50 italic">Booked by student</p>
+                    )}
                   </div>
                 ))}
               </div>

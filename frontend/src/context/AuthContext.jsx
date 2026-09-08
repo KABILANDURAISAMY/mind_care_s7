@@ -25,8 +25,21 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((updatedProfile) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const newUserData = {
+        ...prev,
+        name: updatedProfile.name || prev.name,
+        profile: { ...prev.profile, ...updatedProfile },
+      };
+      localStorage.setItem("mindcare_user", JSON.stringify(newUserData));
+      return newUserData;
+    });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

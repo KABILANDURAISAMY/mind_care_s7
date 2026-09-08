@@ -8,6 +8,7 @@ const STUDENT_LINKS = [
   { to: "/student/appointments", label: "My Appointments", icon: "▤" },
   { to: "/student/wellness-checkin", label: "Wellness Check-in", icon: "✦" },
   { to: "/student/wellness-history", label: "Wellness History", icon: "≈" },
+  { to: "/student/qa-wellness-info", label: "Q/A Wellness Info", icon: "📖" },
   { to: "/student/profile", label: "Profile", icon: "●" },
 ];
 
@@ -21,6 +22,11 @@ const COUNSELLOR_LINKS = [
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
+  const profile = user?.profile || {};
+  const rawName = profile.name || user?.name || "User";
+  const hasDr = /^dr\.?/i.test(rawName);
+  const title = profile.title && !hasDr ? `${profile.title} ` : "";
+  const displayName = user?.role === "counsellor" ? `${title}${rawName}` : rawName;
   const links = user?.role === "counsellor" ? COUNSELLOR_LINKS : STUDENT_LINKS;
 
   return (
@@ -34,7 +40,7 @@ const Sidebar = () => {
 
       <div className="px-6 pb-4">
         <p className="font-body text-xs uppercase tracking-wide text-ink/40">Signed in as</p>
-        <p className="truncate font-body text-sm font-semibold text-pine">{user?.name}</p>
+        <p className="truncate font-body text-sm font-semibold text-pine">{displayName}</p>
       </div>
 
       <nav className="flex-1 space-y-1 px-3">

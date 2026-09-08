@@ -18,6 +18,9 @@ const appointmentSchema = new mongoose.Schema(
     issue: { type: String, required: true },
     details: { type: String, default: "" },
 
+    appointmentType: { type: String, enum: ["Online", "Offline"], required: true, default: "Offline" },
+    meetingLink: { type: String, default: "" },
+
     status: {
       type: String,
       enum: ["Booked", "Completed", "Cancelled", "Missed"],
@@ -27,6 +30,7 @@ const appointmentSchema = new mongoose.Schema(
     cancelledAt: { type: Date, default: null },
     cancellationReason: { type: String, default: "" },
     cancelledBy: { type: String, enum: ["student", "counsellor", null], default: null },
+    cancellationReadByStudent: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

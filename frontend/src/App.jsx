@@ -13,6 +13,7 @@ import BookAppointment from "./pages/student/BookAppointment.jsx";
 import MyAppointments from "./pages/student/MyAppointments.jsx";
 import WellnessCheckin from "./pages/student/WellnessCheckin.jsx";
 import WellnessHistory from "./pages/student/WellnessHistory.jsx";
+import QAWellnessInfo from "./pages/student/QAWellnessInfo.jsx";
 import StudentProfile from "./pages/student/StudentProfile.jsx";
 
 // Counsellor pages
@@ -41,6 +42,8 @@ function App() {
       <Route path="/student/appointments" element={<ProtectedRoute role="student"><MyAppointments /></ProtectedRoute>} />
       <Route path="/student/wellness-checkin" element={<ProtectedRoute role="student"><WellnessCheckin /></ProtectedRoute>} />
       <Route path="/student/wellness-history" element={<ProtectedRoute role="student"><WellnessHistory /></ProtectedRoute>} />
+      <Route path="/student/qa-wellness-info" element={<ProtectedRoute role="student"><QAWellnessInfo /></ProtectedRoute>} />
+      <Route path="/student/qa-assistant" element={<ProtectedRoute role="student"><QAWellnessInfo /></ProtectedRoute>} />
       <Route path="/student/profile" element={<ProtectedRoute role="student"><StudentProfile /></ProtectedRoute>} />
 
       {/* Counsellor auth */}

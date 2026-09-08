@@ -5,21 +5,36 @@ import Loader from "../../components/Loader.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import FeedbackModal from "../../components/FeedbackModal.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { getAppointments, getAssessmentHistory, getPendingFeedback } from "../../services/studentService.js";
+import {
+  getProfile,
+  getAppointments,
+  getAssessmentHistory,
+  getPendingFeedback,
+  getUnreadNotifications,
+  dismissCancellation,
+} from "../../services/studentService.js";
+import QASection from "../../components/QASection.jsx";
+import ChatModule from "../../components/ChatModule.jsx";
+import { useSocket } from "../../context/SocketContext.jsx";
 
 const StudentDashboard = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [appointments, setAppointments] = useState(null);
   const [wellness, setWellness] = useState(null);
   const [pendingFeedback, setPendingFeedback] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [activeTab, setActiveTab] = useState("dashboard"); // dashboard | qa | chat
+  const { globalUnreadCount } = useSocket();
 
   const loadData = () => {
-    Promise.all([getAppointments(), getAssessmentHistory(), getPendingFeedback()])
-      .then(([appts, wellnessData, pending]) => {
+    getProfile().then(updateUser).catch(() => {});
+    Promise.all([getAppointments(), getAssessmentHistory(), getPendingFeedback(), getUnreadNotifications()])
+      .then(([appts, wellnessData, pending, notifs]) => {
         setAppointments(appts);
         setWellness(wellnessData);
         setPendingFeedback(pending);
+        setNotifications(notifs || []);
         if (pending && pending.length > 0) {
           setShowFeedbackModal(true);
         }
@@ -28,6 +43,7 @@ const StudentDashboard = () => {
         setAppointments([]);
         setWellness({ todayScore: null, weeklyAverage: null, trend: "Not enough data" });
         setPendingFeedback([]);
+        setNotifications([]);
       });
   };
 
@@ -35,13 +51,35 @@ const StudentDashboard = () => {
     loadData();
   }, []);
 
+  const handleDismissCancellation = async (id) => {
+    setAppointments((prev) =>
+      (prev || []).map((a) => (a._id === id ? { ...a, cancellationReadByStudent: true } : a))
+    );
+    try {
+      await dismissCancellation(id);
+      loadData();
+    } catch (err) {
+      console.error("Could not dismiss cancellation notice", err);
+    }
+  };
+
+  const handleDismissNotification = async (id) => {
+    setNotifications((prev) => (prev || []).filter((n) => n._id !== id));
+    try {
+      await dismissNotification(id);
+      loadData();
+    } catch (err) {
+      console.error("Could not dismiss notification", err);
+    }
+  };
+
   const upcoming = (appointments || []).filter((a) => a.status === "Booked").slice(0, 3);
   const counsellorCancelled = (appointments || []).filter(
-    (a) => a.status === "Cancelled" && a.cancelledBy === "counsellor"
+    (a) => a.status === "Cancelled" && a.cancelledBy === "counsellor" && !a.cancellationReadByStudent
   );
 
   return (
-    <DashboardLayout title={`Welcome, ${user?.name?.split(" ")[0] || "Student"}`} subtitle={`${user?.profile?.department || ""} · Roll No. ${user?.profile?.rollNumber || ""}`}>
+    <DashboardLayout title={`Welcome, ${user?.name || "Student"}`} subtitle={`${user?.profile?.department || ""} · Roll No. ${user?.profile?.rollNumber || ""}`}>
       {/* Feedback Modal */}
       {showFeedbackModal && pendingFeedback.length > 0 && (
         <FeedbackModal
@@ -57,7 +95,66 @@ const StudentDashboard = () => {
         <Loader label="Loading your dashboard" />
       ) : (
         <div className="space-y-6">
-          {/* Apology & Alternate Booking Banner for Counsellor Cancellations */}
+          {/* Tabs */}
+          <div className="flex gap-4 border-b pb-2">
+            <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`font-semibold px-4 py-2 ${activeTab === "dashboard" ? "border-b-2 border-pine text-pine" : "text-gray-500"}`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab("chat")}
+              className={`font-semibold px-4 py-2 flex items-center gap-2 ${activeTab === "chat" ? "border-b-2 border-pine text-pine" : "text-gray-500"}`}
+            >
+              Chat
+              {globalUnreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{globalUnreadCount}</span>
+              )}
+            </button>
+          </div>
+
+          {activeTab === "chat" && <ChatModule />}
+
+          {activeTab === "dashboard" && (
+            <div className="space-y-6">
+              {/* New Slot Notifications (One-Time Only) */}
+          {notifications.length > 0 && (
+            <div className="space-y-3">
+              {notifications.map((n) => (
+                <div key={n._id} className="flex items-start justify-between rounded-2xl border border-pine/20 bg-pine/10 p-4 shadow-soft">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunrise/20 text-sunrise-dark font-bold text-base mt-0.5">
+                      📢
+                    </span>
+                    <div>
+                      <p className="font-display text-base font-semibold text-pine">{n.title || "New Appointment Slot Available"}</p>
+                      <div className="mt-1 font-body text-xs text-ink/80 whitespace-pre-line leading-relaxed">
+                        {n.message}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 shrink-0 ml-3">
+                    <Link
+                      to="/student/counsellors"
+                      onClick={() => handleDismissNotification(n._id)}
+                      className="btn-primary !py-1.5 !px-3 text-xs"
+                    >
+                      📅 Book Slot
+                    </Link>
+                    <button
+                      onClick={() => handleDismissNotification(n._id)}
+                      className="font-body text-xs font-semibold text-pine/70 hover:text-pine hover:underline px-2.5 py-1.5 rounded-lg border border-pine/10 bg-white/60"
+                    >
+                      Got it / Dismiss
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Apology & Alternate Booking Banner for Counsellor Cancellations (One-Time Only) */}
           {counsellorCancelled.length > 0 && (
             <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-soft">
               <div className="flex items-start gap-4">
@@ -68,13 +165,21 @@ const StudentDashboard = () => {
                   <h3 className="font-display text-lg font-semibold text-amber-900">
                     We are deeply sorry! An appointment was cancelled by your counsellor.
                   </h3>
-                  <div className="mt-2 space-y-2">
-                    {counsellorCancelled.slice(0, 2).map((cAppt) => (
-                      <p key={cAppt._id} className="font-body text-sm text-amber-800">
-                        • Session on <strong>{cAppt.date}</strong> at <strong>{cAppt.time}</strong> with{" "}
-                        <strong>{cAppt.counsellorId?.name || "Counsellor"}</strong> was cancelled. Note:{" "}
-                        <em className="italic">"{cAppt.cancellationReason || "Scheduling conflict"}"</em>
-                      </p>
+                  <div className="mt-2 space-y-3">
+                    {counsellorCancelled.map((cAppt) => (
+                      <div key={cAppt._id} className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/60 pb-2 last:border-0 last:pb-0">
+                        <p className="font-body text-sm text-amber-800">
+                          • Session on <strong>{cAppt.date}</strong> at <strong>{cAppt.time}</strong> with{" "}
+                          <strong>{cAppt.counsellorId?.name || "Counsellor"}</strong> was cancelled. Note:{" "}
+                          <em className="italic">"{cAppt.cancellationReason || "Scheduling conflict"}"</em>
+                        </p>
+                        <button
+                          onClick={() => handleDismissCancellation(cAppt._id)}
+                          className="font-body text-xs font-semibold text-amber-900 hover:underline"
+                        >
+                          Got it / Dismiss
+                        </button>
+                      </div>
                     ))}
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -144,7 +249,9 @@ const StudentDashboard = () => {
             </div>
           </div>
         </div>
-      )}
+        )}
+      </div>
+    )}
     </DashboardLayout>
   );
 };

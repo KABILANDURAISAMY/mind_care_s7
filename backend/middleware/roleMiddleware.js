@@ -3,6 +3,9 @@
  * Usage: router.get("/x", protect, requireRole("counsellor"), handler)
  * This is what stops students reaching counsellor-only APIs and vice versa.
  */
+const Student = require("../models/Student");
+const Counsellor = require("../models/Counsellor");
+
 const requireRole = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {
@@ -14,4 +17,20 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
-module.exports = requireRole;
+const attachRoleProfile = async (req, res, next) => {
+  if (!req.user) return next();
+  try {
+    if (req.user.role === "student") {
+      const student = await Student.findOne({ userId: req.user._id });
+      if (student) req.studentId = student._id;
+    } else if (req.user.role === "counsellor") {
+      const counsellor = await Counsellor.findOne({ userId: req.user._id });
+      if (counsellor) req.counsellorId = counsellor._id;
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { requireRole, attachRoleProfile };

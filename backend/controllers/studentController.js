@@ -4,6 +4,7 @@ const Availability = require("../models/Availability");
 const Appointment = require("../models/Appointment");
 const Assessment = require("../models/Assessment");
 const Feedback = require("../models/Feedback");
+const Notification = require("../models/Notification");
 const { ensureDefaultSlots } = require("../utils/defaultSlots");
 const { WELLNESS_QUESTIONS } = require("../utils/wellnessQuestions");
 const { combineDateTime, isNonEmptyString } = require("../utils/validators");
@@ -46,20 +47,37 @@ const listCounsellors = async (req, res, next) => {
 const getAvailability = async (req, res, next) => {
   try {
     const { counsellorId, date } = req.query;
-    
-    // Ensure default 4 slots exist for counsellors
-    await ensureDefaultSlots(counsellorId || null);
 
     const filter = { status: "available" };
-    if (counsellorId) filter.counsellorId = counsellorId;
+    if (counsellorId) {
+      filter.counsellorId = counsellorId;
+      await ensureDefaultSlots(counsellorId);
+    } else {
+      await ensureDefaultSlots();
+    }
+    
     if (date) filter.date = date;
 
     const slots = await Availability.find(filter)
-      .populate("counsellorId", "name specialization qualification experience")
+      .populate("counsellorId", "name specialization qualification experience title")
       .sort({ date: 1, startTime: 1 });
 
     const now = new Date();
-    const futureSlots = slots.filter((s) => combineDateTime(s.date, s.startTime) > now);
+    const expiredSlotIds = [];
+    const futureSlots = [];
+
+    slots.forEach((s) => {
+      const slotEndTime = combineDateTime(s.date, s.endTime || s.startTime);
+      if (slotEndTime <= now) {
+        expiredSlotIds.push(s._id);
+      } else {
+        futureSlots.push(s);
+      }
+    });
+
+    if (expiredSlotIds.length > 0) {
+      await Availability.updateMany({ _id: { $in: expiredSlotIds } }, { $set: { status: "expired" } });
+    }
 
     res.json(futureSlots);
   } catch (error) {
@@ -76,32 +94,35 @@ const getAvailability = async (req, res, next) => {
 // ownership, availability, validity, and both double-booking checks.
 const bookAppointment = async (req, res, next) => {
   try {
-    const { availabilityId, issue, details } = req.body;
+    const { availabilityId, issue, details, appointmentType } = req.body;
 
     if (!availabilityId || !isNonEmptyString(issue)) {
       return res.status(400).json({ message: "A counsellor slot and a reason for the visit are required." });
+    }
+    
+    if (!appointmentType || !["Online", "Offline"].includes(appointmentType)) {
+      return res.status(400).json({ message: "A valid appointment type (Online or Offline) is required." });
     }
 
     const student = await Student.findOne({ userId: req.user._id });
     if (!student) return res.status(404).json({ message: "Student profile not found." });
 
     const slot = await Availability.findById(availabilityId);
-    if (!slot) return res.status(404).json({ message: "Selected slot no longer exists." });
-
-    if (slot.status !== "available") {
-      return res.status(409).json({ message: "This slot has just been booked by someone else. Please choose another." });
+    if (!slot || slot.status !== "available") {
+      return res.status(409).json({ message: "This slot is no longer available. Please select another slot." });
     }
 
     const counsellor = await Counsellor.findById(slot.counsellorId);
     if (!counsellor) return res.status(404).json({ message: "Counsellor not found." });
 
-    const slotDateTime = combineDateTime(slot.date, slot.startTime);
-    if (slotDateTime <= new Date()) {
-      return res.status(400).json({ message: "This slot is in the past and cannot be booked." });
+    const slotEndTime = combineDateTime(slot.date, slot.endTime || slot.startTime);
+    if (slotEndTime <= new Date()) {
+      slot.status = "expired";
+      await slot.save();
+      return res.status(409).json({ message: "This slot is no longer available. Please select another slot." });
     }
 
     // Prevent the same student double-booking themselves at the same date/time
-    // with a different counsellor (spec section 29).
     const studentConflict = await Appointment.findOne({
       studentId: student._id,
       date: slot.date,
@@ -113,21 +134,18 @@ const bookAppointment = async (req, res, next) => {
     }
 
     // Atomically flip the slot from available -> booked. If two requests race,
-    // only the first update (matched by status: "available") succeeds - this
-    // is the backend-level guarantee against double-booking a counsellor slot.
+    // only the first update (matched by status: "available") succeeds.
     const claimedSlot = await Availability.findOneAndUpdate(
       { _id: slot._id, status: "available" },
       { $set: { status: "booked" } },
       { new: true }
     );
     if (!claimedSlot) {
-      return res.status(409).json({ message: "This slot has just been booked by someone else. Please choose another." });
+      return res.status(409).json({ message: "This slot is no longer available. Please select another slot." });
     }
 
     let appointment;
     try {
-      // The unique compound index on (counsellorId, date, time) for active
-      // statuses is the final, database-enforced backstop against duplicates.
       appointment = await Appointment.create({
         studentId: student._id,
         counsellorId: slot.counsellorId,
@@ -139,15 +157,45 @@ const bookAppointment = async (req, res, next) => {
         time: slot.startTime,
         issue,
         details: details || "",
+        appointmentType: appointmentType,
         status: "Booked",
       });
+      
+      // Auto-create/reuse chat conversation as per Requirement Part 13
+      const Conversation = require("../models/Conversation");
+      const existingConv = await Conversation.findOne({
+        studentId: student._id,
+        counsellorId: slot.counsellorId,
+      });
+      if (!existingConv) {
+        await Conversation.create({
+          studentId: student._id,
+          counsellorId: slot.counsellorId,
+        });
+      }
+
     } catch (err) {
-      // Roll back the slot claim if appointment creation failed for any reason.
       await Availability.findByIdAndUpdate(slot._id, { $set: { status: "available" } });
       throw err;
     }
 
-    sendEmail({ to: student.email, ...templates.bookingConfirmedForStudent(appointment, counsellor.name) });
+    const counsellorDisplayName = counsellor.title ? `${counsellor.title} ${counsellor.name}` : counsellor.name;
+
+    // Create persistent confirmation notification for student
+    await Notification.create({
+      studentId: student._id,
+      counsellorId: counsellor._id,
+      counsellorName: counsellorDisplayName,
+      targetRole: "student",
+      type: "appointment_booked",
+      title: "Appointment Confirmed",
+      message: `Your appointment with ${counsellorDisplayName} is confirmed for ${slot.date} at ${slot.startTime}.`,
+      date: slot.date,
+      time: slot.startTime,
+      readBy: [],
+    });
+
+    sendEmail({ to: student.email, ...templates.bookingConfirmedForStudent(appointment, counsellorDisplayName) });
     sendEmail({ to: counsellor.email, ...templates.newBookingForCounsellor(appointment) });
 
     res.status(201).json({ message: "Appointment booked successfully.", appointment });
@@ -254,8 +302,6 @@ const submitAssessment = async (req, res, next) => {
       totalScore += question.positive ? value : 6 - value;
     });
 
-    const percentage = Math.round((totalScore / (WELLNESS_QUESTIONS.length * 5)) * 100);
-
     const assessment = await Assessment.create({
       studentId: student._id,
       date: today,
@@ -263,6 +309,42 @@ const submitAssessment = async (req, res, next) => {
       totalScore,
       percentage,
     });
+
+    // If daily check-in score is less than 20, trigger a critical alert for the counsellor
+    if (percentage < 20) {
+      const lastAppt = await Appointment.findOne({ studentId: student._id }).sort({ createdAt: -1 });
+      let counsellorsToNotify = [];
+      if (lastAppt) {
+        const c = await Counsellor.findById(lastAppt.counsellorId);
+        if (c) counsellorsToNotify.push(c);
+      }
+      if (counsellorsToNotify.length === 0) {
+        counsellorsToNotify = await Counsellor.find();
+      }
+
+      for (const counsellor of counsellorsToNotify) {
+        const existingAlert = await Notification.findOne({
+          type: "low_wellness_alert",
+          studentId: student._id,
+          counsellorId: counsellor._id,
+          date: today,
+        });
+
+        if (!existingAlert) {
+          await Notification.create({
+            type: "low_wellness_alert",
+            studentId: student._id,
+            counsellorId: counsellor._id,
+            counsellorName: counsellor.name,
+            title: "🚨 Critical Check-In Alert: Score < 20",
+            message: `Student ${student.name} (${student.department || "General"}, Roll: ${student.rollNumber || "N/A"}) completed a daily check-in with a critical score of ${percentage}/100.`,
+            score: percentage,
+            date: today,
+            readByCounsellor: false,
+          });
+        }
+      }
+    }
 
     res.status(201).json({ message: "Wellness check-in submitted.", assessment });
   } catch (error) {
@@ -366,6 +448,96 @@ const getPendingFeedback = async (req, res, next) => {
   }
 };
 
+/* ------------------------------------------------------------------ */
+/* Notifications & Dismissals                                         */
+/* ------------------------------------------------------------------ */
+
+// GET /api/student/notifications
+const getUnreadNotifications = async (req, res, next) => {
+  try {
+    const student = await Student.findOne({ userId: req.user._id });
+    if (!student) return res.status(404).json({ message: "Student profile not found." });
+
+    const notifications = await Notification.find({
+      $and: [
+        {
+          $or: [
+            { studentId: student._id },
+            { targetRole: "student" },
+            { targetRole: "all" },
+            { studentId: { $exists: false } },
+            { studentId: null },
+          ],
+        },
+        { readBy: { $nin: [req.user._id, student._id] } },
+      ],
+    }).sort({ createdAt: -1 });
+
+    res.json(notifications);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/student/notifications/:id/dismiss
+const dismissNotification = async (req, res, next) => {
+  try {
+    const student = await Student.findOne({ userId: req.user._id });
+    if (!student) return res.status(404).json({ message: "Student profile not found." });
+
+    await Notification.findByIdAndUpdate(req.params.id, {
+      $addToSet: { readBy: [req.user._id, student._id] },
+    });
+
+    res.json({ message: "Notification dismissed." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/student/dismiss-cancellation/:id
+const dismissCancellation = async (req, res, next) => {
+  try {
+    const student = await Student.findOne({ userId: req.user._id });
+    if (!student) return res.status(404).json({ message: "Student profile not found." });
+
+    await Appointment.findOneAndUpdate(
+      { _id: req.params.id, studentId: student._id },
+      { $set: { cancellationReadByStudent: true } }
+    );
+
+    res.json({ message: "Cancellation notice dismissed." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/student/qa-assistant
+const qaAssistant = async (req, res, next) => {
+  try {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ message: "Message is required." });
+    }
+
+    // Mock response logic for Q/A Assistant
+    const lowerMessage = message.toLowerCase();
+    let reply = "I'm here to support your mental wellness. Could you tell me more about how you're feeling?";
+    
+    if (lowerMessage.includes("stress") || lowerMessage.includes("anxious")) {
+      reply = "It sounds like you're experiencing some stress. Deep breathing exercises or taking a short walk can help ground you. Have you tried the 4-7-8 breathing technique?";
+    } else if (lowerMessage.includes("exam") || lowerMessage.includes("study")) {
+      reply = "Exam stress is very common. Make sure you are taking regular breaks, staying hydrated, and getting enough sleep. Breaking your study sessions into 25-minute focused blocks (Pomodoro technique) can be highly effective.";
+    } else if (lowerMessage.includes("lonely") || lowerMessage.includes("alone")) {
+      reply = "Feeling lonely in college is something many students go through. Consider reaching out to a friend, joining a club, or booking a session with one of our counsellors to talk about it.";
+    }
+
+    res.json({ reply });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getProfile,
   listCounsellors,
@@ -378,4 +550,8 @@ module.exports = {
   getAssessmentHistory,
   submitFeedback,
   getPendingFeedback,
+  getUnreadNotifications,
+  dismissNotification,
+  dismissCancellation,
+  qaAssistant,
 };

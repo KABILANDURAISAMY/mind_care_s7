@@ -5,7 +5,7 @@ import Loader from "../../components/Loader.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import Banner from "../../components/Banner.jsx";
 import Modal from "../../components/Modal.jsx";
-import { getAppointments, updateAppointmentStatus, cancelCounsellorAppointment } from "../../services/counsellorService.js";
+import { getAppointments, updateAppointmentStatus, cancelCounsellorAppointment, updateMeetingLink } from "../../services/counsellorService.js";
 
 const STATUS_STYLES = {
   Booked: "bg-sage-light/40 text-sage-dark",
@@ -25,6 +25,11 @@ const Appointments = () => {
   const [cancellationTarget, setCancellationTarget] = useState(null);
   const [apologyReason, setApologyReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
+
+  // Meeting Link modal state
+  const [meetingLinkTarget, setMeetingLinkTarget] = useState(null);
+  const [meetingLink, setMeetingLink] = useState("");
+  const [updatingLink, setUpdatingLink] = useState(false);
 
   const load = () => getAppointments().then(setAppointments).catch(() => setAppointments([]));
   useEffect(() => { load(); }, []);
@@ -60,6 +65,24 @@ const Appointments = () => {
       setError(err.response?.data?.message || "Could not cancel this appointment.");
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleUpdateLink = async (e) => {
+    e.preventDefault();
+    if (!meetingLinkTarget) return;
+    setUpdatingLink(true);
+    setError("");
+    setSuccess("");
+    try {
+      await updateMeetingLink(meetingLinkTarget._id, meetingLink);
+      setSuccess("Meeting link updated successfully.");
+      setMeetingLinkTarget(null);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not update meeting link.");
+    } finally {
+      setUpdatingLink(false);
     }
   };
 
@@ -99,6 +122,7 @@ const Appointments = () => {
                 <th className="px-5 py-3 font-medium">Date</th>
                 <th className="px-5 py-3 font-medium">Time</th>
                 <th className="px-5 py-3 font-medium">Issue</th>
+                <th className="px-5 py-3 font-medium">Type/Link</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Actions</th>
               </tr>
@@ -116,6 +140,27 @@ const Appointments = () => {
                   <td className="px-5 py-3 text-ink/70">{a.date}</td>
                   <td className="px-5 py-3 text-ink/70">{a.time}</td>
                   <td className="px-5 py-3 text-ink/70">{a.issue}</td>
+                  <td className="px-5 py-3 text-ink/70">
+                    <div>{a.appointmentType || "Offline"}</div>
+                    {a.appointmentType === "Online" && (
+                      <div className="mt-1">
+                        {a.meetingLink ? (
+                          <a href={a.meetingLink} target="_blank" rel="noreferrer" className="text-sunrise text-xs underline block truncate max-w-[150px]">{a.meetingLink}</a>
+                        ) : (
+                          <span className="text-xs text-ink/40">No link set</span>
+                        )}
+                        <button 
+                          onClick={() => {
+                            setMeetingLinkTarget(a);
+                            setMeetingLink(a.meetingLink || "");
+                          }}
+                          className="text-xs text-sage-dark hover:underline block mt-1"
+                        >
+                          {a.meetingLink ? "Edit Link" : "Add Link"}
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-3">
                     <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[a.status]}`}>{a.status}</span>
                   </td>
@@ -195,6 +240,40 @@ const Appointments = () => {
                 className="btn-primary !bg-red-600 hover:!bg-red-500 text-sm disabled:opacity-60"
               >
                 {cancelling ? "Cancelling…" : "Confirm Cancellation"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Meeting Link Modal */}
+      <Modal open={!!meetingLinkTarget} onClose={() => setMeetingLinkTarget(null)} title="Update Meeting Link">
+        {meetingLinkTarget && (
+          <form onSubmit={handleUpdateLink} className="space-y-4">
+            <p className="font-body text-sm text-ink/70">
+              Set the online meeting link for your session with <strong className="text-pine">{meetingLinkTarget.studentName}</strong> on <strong>{meetingLinkTarget.date}</strong>.
+            </p>
+            <div>
+              <label className="label-field">Meeting URL (Google Meet, Zoom, etc.)</label>
+              <input
+                type="url"
+                value={meetingLink}
+                onChange={(e) => setMeetingLink(e.target.value)}
+                className="input-field"
+                placeholder="https://meet.google.com/..."
+                required
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setMeetingLinkTarget(null)} className="btn-ghost text-sm">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updatingLink}
+                className="btn-primary text-sm disabled:opacity-60"
+              >
+                {updatingLink ? "Saving…" : "Save Link"}
               </button>
             </div>
           </form>

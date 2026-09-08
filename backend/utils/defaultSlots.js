@@ -8,59 +8,57 @@ const DEFAULT_TIME_SLOTS = [
   { startTime: "16:00", endTime: "17:00" },
 ];
 
+const getLocalDateString = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 /**
  * Ensures every active counsellor has the 4 default daily slots
  * for the current day and the upcoming daysAhead days.
  */
 const ensureDefaultSlots = async (specificCounsellorId = null, daysAhead = 7) => {
-  try {
-    let counsellors = [];
-    if (specificCounsellorId) {
-      const found = await Counsellor.findById(specificCounsellorId);
-      if (found) counsellors = [found];
-    } else {
-      counsellors = await Counsellor.find();
+  const query = specificCounsellorId ? { _id: specificCounsellorId } : {};
+  const counsellors = await Counsellor.find(query);
+
+  const now = new Date();
+  const targetDates = [];
+  
+  for (let i = 0; i <= daysAhead; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    // Exclude Sunday (0)
+    if (d.getDay() !== 0) {
+      targetDates.push(getLocalDateString(d));
     }
+  }
 
-    if (!counsellors.length) return;
-
-    const dates = [];
-    const today = new Date();
-    for (let i = 0; i <= daysAhead; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() + i);
-      dates.push(d.toISOString().slice(0, 10)); // YYYY-MM-DD
-    }
-
-    for (const counsellor of counsellors) {
-      for (const dateStr of dates) {
-        for (const slot of DEFAULT_TIME_SLOTS) {
-          try {
-            await Availability.updateOne(
-              {
-                counsellorId: counsellor._id,
-                date: dateStr,
-                startTime: slot.startTime,
-              },
-              {
-                $setOnInsert: {
-                  counsellorId: counsellor._id,
-                  date: dateStr,
-                  startTime: slot.startTime,
-                  endTime: slot.endTime,
-                  status: "available",
-                },
-              },
-              { upsert: true }
-            );
-          } catch (err) {
-            // Ignore duplicate key errors if index catches concurrent creation
-          }
-        }
+  for (const counsellor of counsellors) {
+    for (const dateStr of targetDates) {
+      for (const slot of DEFAULT_TIME_SLOTS) {
+        // Use an upsert with $setOnInsert to only create if it doesn't exist
+        // thus avoiding duplicate slots and preserving any status changes if it was already booked/removed
+        await Availability.updateOne(
+          {
+            counsellorId: counsellor._id,
+            date: dateStr,
+            startTime: slot.startTime
+          },
+          {
+            $setOnInsert: {
+              counsellorId: counsellor._id,
+              date: dateStr,
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              status: "available"
+            }
+          },
+          { upsert: true }
+        );
       }
     }
-  } catch (error) {
-    console.error("Error generating default slots:", error);
   }
 };
 

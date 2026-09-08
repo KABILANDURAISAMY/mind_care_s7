@@ -29,6 +29,7 @@ const BookAppointment = () => {
 
   const [issue, setIssue] = useState("");
   const [details, setDetails] = useState("");
+  const [appointmentType, setAppointmentType] = useState("Offline");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -63,7 +64,7 @@ const BookAppointment = () => {
 
     setSubmitting(true);
     try {
-      await bookAppointment({ availabilityId: selectedSlot._id, issue, details });
+      await bookAppointment({ availabilityId: selectedSlot._id, issue, details, appointmentType });
       setSuccess("Appointment booked! Redirecting to your appointments…");
       setTimeout(() => navigate("/student/appointments"), 1200);
     } catch (err) {
@@ -85,9 +86,10 @@ const BookAppointment = () => {
             <label className="label-field">Counsellor</label>
             <select value={counsellorId} onChange={(e) => setCounsellorId(e.target.value)} className="input-field">
               <option value="">All counsellors</option>
-              {counsellors.map((c) => (
-                <option key={c._id} value={c._id}>{c.name} — {c.specialization}</option>
-              ))}
+              {counsellors.map((c) => {
+                const cName = c.title ? `${c.title} ${c.name}` : c.name;
+                return <option key={c._id} value={c._id}>{cName} — {c.specialization}</option>;
+              })}
             </select>
 
             <p className="label-field mt-5">Available slots</p>
@@ -99,6 +101,7 @@ const BookAppointment = () => {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {slots.map((s) => {
                   const active = selectedSlot?._id === s._id;
+                  const cName = s.counsellorId?.title ? `${s.counsellorId.title} ${s.counsellorId.name}` : s.counsellorId?.name;
                   return (
                     <button
                       key={s._id}
@@ -110,7 +113,7 @@ const BookAppointment = () => {
                     >
                       <p className="font-semibold text-pine">{s.date}</p>
                       <p className="text-ink/60">{s.startTime}</p>
-                      {!counsellorId && <p className="mt-1 truncate text-xs text-sage-dark">{s.counsellorId?.name}</p>}
+                      {!counsellorId && <p className="mt-1 truncate text-xs text-sage-dark">{cName}</p>}
                     </button>
                   );
                 })}
@@ -129,7 +132,9 @@ const BookAppointment = () => {
 
             {selectedSlot ? (
               <div className="mb-4 rounded-xl border border-sunrise/40 bg-sunrise/10 px-4 py-3 font-body text-sm">
-                <p className="font-semibold text-pine">{selectedSlot.counsellorId?.name || "Selected counsellor"}</p>
+                <p className="font-semibold text-pine">
+                  {selectedSlot.counsellorId?.title ? `${selectedSlot.counsellorId.title} ${selectedSlot.counsellorId.name}` : selectedSlot.counsellorId?.name || "Selected counsellor"}
+                </p>
                 <p className="text-ink/60">{selectedSlot.date} at {selectedSlot.startTime}</p>
               </div>
             ) : (
@@ -141,6 +146,32 @@ const BookAppointment = () => {
               <option value="">Select a reason</option>
               {ISSUE_OPTIONS.map((o) => <option key={o}>{o}</option>)}
             </select>
+
+            <label className="label-field mt-4">Consultation Type</label>
+            <div className="flex gap-4 mt-2">
+              <label className="flex items-center gap-2 cursor-pointer font-body text-sm text-pine">
+                <input 
+                  type="radio" 
+                  name="appointmentType" 
+                  value="Offline" 
+                  checked={appointmentType === "Offline"} 
+                  onChange={() => setAppointmentType("Offline")}
+                  className="text-pine focus:ring-pine" 
+                />
+                Offline (In-person)
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer font-body text-sm text-pine">
+                <input 
+                  type="radio" 
+                  name="appointmentType" 
+                  value="Online" 
+                  checked={appointmentType === "Online"} 
+                  onChange={() => setAppointmentType("Online")}
+                  className="text-pine focus:ring-pine" 
+                />
+                Online (Video Call)
+              </label>
+            </div>
 
             <label className="label-field mt-4">Additional details (optional)</label>
             <textarea

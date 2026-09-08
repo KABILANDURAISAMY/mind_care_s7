@@ -14,3 +14,11 @@ export const getAssessmentHistory = () => api.get("/student/assessment-history")
 export const submitFeedback = (appointmentId, rating, comment) =>
   api.post("/student/feedback", { appointmentId, rating, comment }).then((r) => r.data);
 export const getPendingFeedback = () => api.get("/student/pending-feedback").then((r) => r.data);
+
+export const getUnreadNotifications = () => api.get("/student/notifications").then((r) => r.data);
+export const dismissNotification = (id) => api.put(`/student/notifications/${id}/dismiss`).then((r) => r.data);
+export const dismissCancellation = (id) => api.put(`/student/dismiss-cancellation/${id}`).then((r) => r.data);
+
+// Q/A Wellness Info Services
+export const getWellnessCategories = () => api.get("/wellness/categories").then((r) => r.data);
+export const getWellnessQuestions = (category) => api.get(`/wellness/questions/${encodeURIComponent(category)}`).then((r) => r.data);

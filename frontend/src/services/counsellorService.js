@@ -11,6 +11,9 @@ export const getAppointments = () => api.get("/counsellor/appointments").then((r
 export const updateAppointmentStatus = (id, status) =>
   api.put(`/counsellor/appointments/${id}/status`, { status }).then((r) => r.data);
 
+export const updateMeetingLink = (id, meetingLink) =>
+  api.put(`/counsellor/appointments/${id}/link`, { meetingLink }).then((r) => r.data);
+
 export const listStudents = () => api.get("/counsellor/students").then((r) => r.data);
 export const getStudentDetail = (id) => api.get(`/counsellor/student/${id}`).then((r) => r.data);
 export const getStudentHistory = (id) => api.get(`/counsellor/student/${id}/history`).then((r) => r.data);
@@ -19,3 +22,6 @@ export const getStudentAssessments = (id) => api.get(`/counsellor/student/${id}/
 export const cancelCounsellorAppointment = (id, reason) =>
   api.put(`/counsellor/appointments/${id}/cancel`, { reason }).then((r) => r.data);
 export const getCounsellorFeedbacks = () => api.get("/counsellor/feedbacks").then((r) => r.data);
+
+export const getCounsellorNotifications = () => api.get("/counsellor/notifications").then((r) => r.data);
+export const dismissCounsellorNotification = (id) => api.put(`/counsellor/notifications/${id}/dismiss`).then((r) => r.data);

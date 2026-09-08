@@ -26,6 +26,10 @@ const Counsellor = require("../backend/models/Counsellor");
 const Availability = require("../backend/models/Availability");
 const Appointment = require("../backend/models/Appointment");
 const Assessment = require("../backend/models/Assessment");
+const WellnessFAQ = require("../backend/models/WellnessFAQ");
+const Conversation = require("../backend/models/Conversation");
+const ChatMessage = require("../backend/models/ChatMessage");
+const { wellnessQAData } = require("./qaData");
 
 const DEMO_PASSWORD = "Passw0rd!";
 
@@ -35,7 +39,18 @@ function todayPlus(days) {
   return d.toISOString().slice(0, 10);
 }
 
-async function seedData() {
+async function seedData(options = {}) {
+  const { forceClear = false } = options;
+  try {
+    const existingUserCount = await User.countDocuments();
+    if (existingUserCount > 0 && !forceClear) {
+      console.log(`[Seed] Database already contains ${existingUserCount} users. Preserving existing records.`);
+      return;
+    }
+  } catch (err) {
+    // Continue with seed if check fails
+  }
+
   await Promise.all([
     User.deleteMany({}),
     Student.deleteMany({}),
@@ -43,8 +58,11 @@ async function seedData() {
     Availability.deleteMany({}),
     Appointment.deleteMany({}),
     Assessment.deleteMany({}),
+    WellnessFAQ.deleteMany({}),
+    Conversation.deleteMany({}),
+    ChatMessage.deleteMany({})
   ]);
-  console.log("[Seed] Cleared existing collections.");
+  console.log("[Seed] Initialized fresh collections for demo data.");
 
   // --- Counsellors ------------------------------------------------------
   const counsellorSeeds = [
@@ -139,6 +157,10 @@ async function seedData() {
     await Assessment.create({ studentId: students[0]._id, date, responses, totalScore, percentage });
   }
   console.log(`[Seed] Created ${scores.length} wellness check-in records for ${students[0].name}.`);
+
+  // --- Seed Wellness Q/A Data ---------------------------------------------
+  await WellnessFAQ.insertMany(wellnessQAData);
+  console.log(`[Seed] Inserted ${wellnessQAData.length} Wellness FAQ entries.`);
 
   console.log("\n[Seed] Complete. Generated Accounts:");
   console.log("\n--- Students ---");

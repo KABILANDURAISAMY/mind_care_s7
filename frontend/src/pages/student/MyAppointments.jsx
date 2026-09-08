@@ -6,7 +6,7 @@ import EmptyState from "../../components/EmptyState.jsx";
 import Banner from "../../components/Banner.jsx";
 import Modal from "../../components/Modal.jsx";
 import FeedbackModal from "../../components/FeedbackModal.jsx";
-import { getAppointments, cancelAppointment, getPendingFeedback } from "../../services/studentService.js";
+import { getAppointments, cancelAppointment, getPendingFeedback, dismissCancellation } from "../../services/studentService.js";
 
 const STATUS_STYLES = {
   Booked: "bg-sage-light/40 text-sage-dark",
@@ -114,9 +114,19 @@ const MyAppointments = () => {
             <div key={a._id} className="card space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <p className="font-display text-base font-semibold text-pine">{a.counsellorId?.name || "Counsellor"}</p>
+                  <p className="font-display text-base font-semibold text-pine">
+                    {a.counsellorId?.title ? `${a.counsellorId.title} ${a.counsellorId.name}` : a.counsellorId?.name || "Counsellor"}
+                  </p>
                   <p className="mt-0.5 font-body text-sm text-ink/60">{a.date} at {a.time} · {a.issue}</p>
                   {a.details && <p className="mt-1 font-body text-xs text-ink/45">{a.details}</p>}
+                  <p className="mt-1 font-body text-xs font-medium text-pine">
+                    Type: {a.appointmentType || "Offline"} 
+                    {a.appointmentType === "Online" && a.meetingLink && (
+                      <span className="ml-3">
+                        <a href={a.meetingLink} target="_blank" rel="noreferrer" className="text-sunrise underline">Join Meeting</a>
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`rounded-full px-3 py-1 font-body text-xs font-semibold ${STATUS_STYLES[a.status]}`}>
@@ -142,11 +152,22 @@ const MyAppointments = () => {
               </div>
 
               {/* Counsellor Cancellation Apology & Alternate Booking */}
-              {a.status === "Cancelled" && a.cancelledBy === "counsellor" && (
+              {a.status === "Cancelled" && a.cancelledBy === "counsellor" && !a.cancellationReadByStudent && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3">
-                  <p className="font-body text-xs font-semibold text-amber-900">
-                    😔 Cancelled by Counsellor — We are sorry!
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="font-body text-xs font-semibold text-amber-900">
+                      😔 Cancelled by Counsellor — We are sorry!
+                    </p>
+                    <button
+                      onClick={async () => {
+                        await dismissCancellation(a._id);
+                        load();
+                      }}
+                      className="font-body text-[11px] font-semibold text-amber-900 hover:underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
                   {a.cancellationReason && (
                     <p className="mt-1 font-body text-xs text-amber-800">
                       Reason: <em>"{a.cancellationReason}"</em>

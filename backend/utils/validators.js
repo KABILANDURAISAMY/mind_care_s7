@@ -10,13 +10,35 @@ const isValidTime = (value) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
 /**
  * Combines a YYYY-MM-DD date string and HH:mm time string into a Date
- * object interpreted in server-local time. Centralized here so every
- * part of the codebase parses appointment date/time identically.
+ * object, explicitly interpreted in IST (Asia/Kolkata, UTC+05:30).
  */
 const combineDateTime = (date, time) => {
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours, minutes] = time.split(":").map(Number);
-  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+  if (!date || !time) return new Date(0);
+  const formattedTime = time.length === 5 ? `${time}:00` : time;
+  return new Date(`${date}T${formattedTime}+05:30`);
+};
+
+/**
+ * Returns current Date in IST.
+ */
+const getISTNow = () => new Date();
+
+/**
+ * Returns today's date string in YYYY-MM-DD according to IST timezone.
+ */
+const getISTDateString = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find((p) => p.type === "year").value;
+  const month = parts.find((p) => p.type === "month").value;
+  const day = parts.find((p) => p.type === "day").value;
+
+  return `${year}-${month}-${day}`;
 };
 
 module.exports = {
@@ -25,4 +47,7 @@ module.exports = {
   isValidDate,
   isValidTime,
   combineDateTime,
+  getISTNow,
+  getISTDateString,
 };
+
