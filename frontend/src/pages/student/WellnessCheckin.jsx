@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Loader from "../../components/Loader.jsx";
 import Banner from "../../components/Banner.jsx";
@@ -21,12 +21,48 @@ const POSITIVE_SCALE = [
   { value: 5, label: "Very Good" },
 ];
 
+const getCategoryAndRecommendation = (percentage) => {
+  if (percentage >= 80) {
+    return {
+      category: "Excellent Wellness",
+      color: "text-emerald-700 bg-emerald-50 border-emerald-200",
+      recommendation: "You're in a great mental space! Keep maintaining your positive daily routines, sleep habits, and social connections.",
+    };
+  }
+  if (percentage >= 60) {
+    return {
+      category: "Good Wellness",
+      color: "text-pine bg-mist border-pine/10",
+      recommendation: "You are doing well overall. Remember to take short breaks when studying and stay hydrated.",
+    };
+  }
+  if (percentage >= 40) {
+    return {
+      category: "Moderate Wellness",
+      color: "text-amber-800 bg-amber-50 border-amber-200",
+      recommendation: "You may be experiencing some mild stress or fatigue. Consider trying a quick breathing exercise or light walk.",
+    };
+  }
+  if (percentage >= 30) {
+    return {
+      category: "Needs Attention",
+      color: "text-orange-800 bg-orange-50 border-orange-200",
+      recommendation: "Your score indicates moderate stress or discomfort. Talking to a counsellor or trusted friend could help lighten your load.",
+    };
+  }
+  return {
+    category: "Low Wellness Score (< 30%)",
+    color: "text-red-800 bg-red-50 border-red-200",
+    recommendation: "Your wellness score is below 30%. An alert has been generated for your counsellor so they can offer support. Feel free to book a session anytime.",
+  };
+};
+
 const WellnessCheckin = () => {
   const [questions, setQuestions] = useState(null);
   const [answers, setAnswers] = useState({});
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
+  const [result, setResult] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -46,15 +82,16 @@ const WellnessCheckin = () => {
     setSubmitting(true);
     try {
       const responses = questions.map((q) => answers[q.id]);
-      await submitAssessment(responses);
-      setDone(true);
-      setTimeout(() => navigate("/student/wellness-history"), 1600);
+      const resData = await submitAssessment(responses);
+      setResult(resData.assessment);
     } catch (err) {
       setError(err.response?.data?.message || "Could not submit your check-in.");
     } finally {
       setSubmitting(false);
     }
   };
+
+  const outcome = result ? getCategoryAndRecommendation(result.percentage) : null;
 
   return (
     <DashboardLayout
@@ -63,10 +100,37 @@ const WellnessCheckin = () => {
     >
       {questions === null ? (
         <Loader label="Loading today's check-in" />
-      ) : done ? (
-        <div className="card text-center">
-          <p className="font-display text-2xl font-semibold text-pine">Thanks for checking in ✦</p>
-          <p className="mt-2 font-body text-ink/60">Taking you to your wellness history…</p>
+      ) : result ? (
+        <div className="max-w-2xl space-y-6">
+          <div className="card text-center space-y-4">
+            <p className="font-display text-2xl font-semibold text-pine">Check-in Complete ✦</p>
+            <p className="font-body text-xs text-ink/50 uppercase tracking-wide">Assessment Date: {result.date}</p>
+
+            <div className="grid grid-cols-2 gap-4 my-4">
+              <div className="rounded-2xl bg-mist p-4">
+                <span className="font-body text-xs font-medium text-ink/50 block mb-1">Total Score</span>
+                <span className="font-display text-3xl font-bold text-pine">{result.totalScore} <span className="text-sm font-normal text-ink/40">/ 50</span></span>
+              </div>
+              <div className="rounded-2xl bg-mist p-4">
+                <span className="font-body text-xs font-medium text-ink/50 block mb-1">Percentage Score</span>
+                <span className="font-display text-3xl font-bold text-sunrise-dark">{result.percentage}%</span>
+              </div>
+            </div>
+
+            <div className={`rounded-xl border p-4 text-left ${outcome.color}`}>
+              <p className="font-display text-base font-semibold">{outcome.category}</p>
+              <p className="mt-1 font-body text-sm opacity-90">{outcome.recommendation}</p>
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
+              <Link to="/student/wellness-history" className="btn-primary !py-2.5 !px-5 text-sm">
+                View Wellness History
+              </Link>
+              <Link to="/student/counsellors" className="rounded-xl border border-pine/20 bg-white px-5 py-2.5 font-body text-sm font-semibold text-pine hover:bg-mist transition">
+                Talk to a Counsellor
+              </Link>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="max-w-2xl">

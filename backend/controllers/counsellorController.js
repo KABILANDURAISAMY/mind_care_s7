@@ -111,9 +111,6 @@ const listAvailability = async (req, res, next) => {
     const counsellor = await Counsellor.findOne({ userId: req.user._id });
     if (!counsellor) return res.status(404).json({ message: "Counsellor profile not found." });
 
-    // Generate default slots for this counsellor for the next 7 days
-    await ensureDefaultSlots(counsellor._id);
-
     const now = new Date();
 
     // Fetch non-removed and non-cancelled slots for this counsellor
@@ -428,8 +425,12 @@ const getCounsellorNotifications = async (req, res, next) => {
     if (!counsellor) return res.status(404).json({ message: "Counsellor profile not found." });
 
     const notifications = await Notification.find({
-      counsellorId: counsellor._id,
-      type: "low_wellness_alert",
+      targetRole: { $ne: "student" },
+      $or: [
+        { counsellorId: counsellor._id },
+        { counsellorId: null },
+        { counsellorId: { $exists: false } },
+      ],
       readByCounsellor: false,
       readBy: { $nin: [req.user._id, counsellor._id] },
     })
@@ -448,13 +449,10 @@ const dismissCounsellorNotification = async (req, res, next) => {
     const counsellor = await Counsellor.findOne({ userId: req.user._id });
     if (!counsellor) return res.status(404).json({ message: "Counsellor profile not found." });
 
-    await Notification.findOneAndUpdate(
-      { _id: req.params.id, counsellorId: counsellor._id },
-      {
-        $set: { readByCounsellor: true },
-        $addToSet: { readBy: [req.user._id, counsellor._id] },
-      }
-    );
+    await Notification.findByIdAndUpdate(req.params.id, {
+      $set: { readByCounsellor: true },
+      $addToSet: { readBy: { $each: [req.user._id, counsellor._id] } },
+    });
 
     res.json({ message: "Notification dismissed." });
   } catch (error) {

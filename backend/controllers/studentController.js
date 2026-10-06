@@ -51,9 +51,6 @@ const getAvailability = async (req, res, next) => {
     const filter = { status: "available" };
     if (counsellorId) {
       filter.counsellorId = counsellorId;
-      await ensureDefaultSlots(counsellorId);
-    } else {
-      await ensureDefaultSlots();
     }
     
     if (date) filter.date = date;
@@ -302,6 +299,9 @@ const submitAssessment = async (req, res, next) => {
       totalScore += question.positive ? value : 6 - value;
     });
 
+    const maxScore = WELLNESS_QUESTIONS.length * 5; // 10 questions * 5 = 50
+    const percentage = Math.round((totalScore / maxScore) * 100);
+
     const assessment = await Assessment.create({
       studentId: student._id,
       date: today,
@@ -310,23 +310,29 @@ const submitAssessment = async (req, res, next) => {
       percentage,
     });
 
-    // If daily check-in score is less than 20, trigger a critical alert for the counsellor
-    if (percentage < 20) {
+    // If wellness score percentage is strictly less than 30, notify the student's assigned counsellor
+    if (percentage < 30) {
+      // Locate the counsellor responsible for this student from existing relationships
+      let counsellorToNotify = null;
       const lastAppt = await Appointment.findOne({ studentId: student._id }).sort({ createdAt: -1 });
-      let counsellorsToNotify = [];
       if (lastAppt) {
-        const c = await Counsellor.findById(lastAppt.counsellorId);
-        if (c) counsellorsToNotify.push(c);
-      }
-      if (counsellorsToNotify.length === 0) {
-        counsellorsToNotify = await Counsellor.find();
+        counsellorToNotify = await Counsellor.findById(lastAppt.counsellorId);
       }
 
-      for (const counsellor of counsellorsToNotify) {
+      if (!counsellorToNotify) {
+        const Conversation = require("../models/Conversation");
+        const conv = await Conversation.findOne({ studentId: student._id }).sort({ updatedAt: -1 });
+        if (conv) {
+          counsellorToNotify = await Counsellor.findById(conv.counsellorId);
+        }
+      }
+
+      // Send alert strictly to the assigned counsellor only (do NOT broadcast)
+      if (counsellorToNotify) {
         const existingAlert = await Notification.findOne({
           type: "low_wellness_alert",
           studentId: student._id,
-          counsellorId: counsellor._id,
+          counsellorId: counsellorToNotify._id,
           date: today,
         });
 
@@ -334,10 +340,10 @@ const submitAssessment = async (req, res, next) => {
           await Notification.create({
             type: "low_wellness_alert",
             studentId: student._id,
-            counsellorId: counsellor._id,
-            counsellorName: counsellor.name,
-            title: "🚨 Critical Check-In Alert: Score < 20",
-            message: `Student ${student.name} (${student.department || "General"}, Roll: ${student.rollNumber || "N/A"}) completed a daily check-in with a critical score of ${percentage}/100.`,
+            counsellorId: counsellorToNotify._id,
+            counsellorName: counsellorToNotify.name,
+            title: "🚨 Student Wellness Alert: Score < 30%",
+            message: "A student under your care has received a wellness score below 30%. Please review the student's wellness result.",
             score: percentage,
             date: today,
             readByCounsellor: false,
@@ -390,32 +396,54 @@ const submitFeedback = async (req, res, next) => {
     const student = await Student.findOne({ userId: req.user._id });
     if (!student) return res.status(404).json({ message: "Student profile not found." });
 
-    const { appointmentId, rating, comment } = req.body;
-    if (!appointmentId || !rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ message: "Appointment ID and a valid rating (1-5) are required." });
+    const { appointmentId, counsellorId, rating, comment } = req.body;
+    const numRating = Number(rating);
+    if (!numRating || numRating < 1 || numRating > 5) {
+      return res.status(400).json({ message: "A valid rating between 1 and 5 is required." });
     }
 
-    const appointment = await Appointment.findOne({ _id: appointmentId, studentId: student._id });
-    if (!appointment) return res.status(404).json({ message: "Appointment not found." });
+    // Appointment-specific feedback
+    if (appointmentId) {
+      const appointment = await Appointment.findOne({ _id: appointmentId, studentId: student._id });
+      if (!appointment) return res.status(404).json({ message: "Appointment not found." });
 
-    if (appointment.status !== "Completed") {
-      return res.status(400).json({ message: "Feedback can only be submitted for completed sessions." });
+      if (appointment.status !== "Completed") {
+        return res.status(400).json({ message: "Feedback can only be submitted for completed sessions." });
+      }
+
+      const existing = await Feedback.findOne({ appointmentId, studentId: student._id });
+      if (existing) {
+        return res.status(409).json({ message: "Feedback has already been submitted for this session." });
+      }
+
+      const feedback = await Feedback.create({
+        appointmentId: appointment._id,
+        studentId: student._id,
+        counsellorId: appointment.counsellorId,
+        rating: numRating,
+        comment: comment || "",
+      });
+
+      return res.status(201).json({ message: "Thank you for your session feedback!", feedback });
     }
 
-    const existing = await Feedback.findOne({ appointmentId });
-    if (existing) {
-      return res.status(409).json({ message: "Feedback has already been submitted for this session." });
+    // General counsellor feedback
+    if (counsellorId) {
+      const counsellor = await Counsellor.findById(counsellorId);
+      if (!counsellor) return res.status(404).json({ message: "Counsellor not found." });
+
+      const feedback = await Feedback.create({
+        appointmentId: null,
+        studentId: student._id,
+        counsellorId: counsellor._id,
+        rating: numRating,
+        comment: comment || "",
+      });
+
+      return res.status(201).json({ message: "Thank you for rating your counsellor!", feedback });
     }
 
-    const feedback = await Feedback.create({
-      appointmentId: appointment._id,
-      studentId: student._id,
-      counsellorId: appointment.counsellorId,
-      rating: Number(rating),
-      comment: comment || "",
-    });
-
-    res.status(201).json({ message: "Thank you for your feedback!", feedback });
+    return res.status(400).json({ message: "Either an appointmentId or counsellorId is required." });
   } catch (error) {
     next(error);
   }
@@ -459,18 +487,13 @@ const getUnreadNotifications = async (req, res, next) => {
     if (!student) return res.status(404).json({ message: "Student profile not found." });
 
     const notifications = await Notification.find({
-      $and: [
-        {
-          $or: [
-            { studentId: student._id },
-            { targetRole: "student" },
-            { targetRole: "all" },
-            { studentId: { $exists: false } },
-            { studentId: null },
-          ],
-        },
-        { readBy: { $nin: [req.user._id, student._id] } },
+      targetRole: { $ne: "counsellor" },
+      $or: [
+        { studentId: student._id },
+        { studentId: null },
+        { studentId: { $exists: false } },
       ],
+      readBy: { $nin: [req.user._id, student._id] },
     }).sort({ createdAt: -1 });
 
     res.json(notifications);
@@ -486,7 +509,7 @@ const dismissNotification = async (req, res, next) => {
     if (!student) return res.status(404).json({ message: "Student profile not found." });
 
     await Notification.findByIdAndUpdate(req.params.id, {
-      $addToSet: { readBy: [req.user._id, student._id] },
+      $addToSet: { readBy: { $each: [req.user._id, student._id] } },
     });
 
     res.json({ message: "Notification dismissed." });

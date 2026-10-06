@@ -83,49 +83,51 @@ const CounsellorDashboard = () => {
 
           {activeTab === "dashboard" && (
             <div className="space-y-6">
-              {/* Critical Check-In Alerts (< 20 Score) */}
-          {notifications.length > 0 && (
-            <div className="space-y-3">
-              {notifications.map((n) => (
-                <div key={n._id} className="rounded-2xl border border-red-300 bg-red-50 p-5 shadow-soft">
-                  <div className="flex items-start gap-4">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-xl text-red-700">
-                      🚨
-                    </span>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-display text-lg font-semibold text-red-900">
-                          Critical Student Wellness Alert (Check-In Score &lt; 20)
-                        </h3>
-                        <button
-                          onClick={() => handleDismissNotification(n._id)}
-                          className="font-body text-xs font-semibold text-red-800 hover:text-red-900 hover:underline bg-red-100 px-3 py-1 rounded-lg"
-                        >
-                          Got it / Dismiss
-                        </button>
-                      </div>
-                      <p className="mt-1 font-body text-sm text-red-800">
-                        {n.message}
-                      </p>
-                      <div className="mt-3 flex items-center gap-3">
-                        {n.studentId?._id && (
-                          <Link
-                            to={`/counsellor/student/${n.studentId._id}`}
-                            className="btn-primary !py-1.5 !px-3 text-xs !bg-red-800 hover:!bg-red-900"
-                          >
-                            👤 View Student Profile
-                          </Link>
-                        )}
-                        <span className="font-body text-xs text-red-700 font-medium">
-                          Immediate counsellor follow-up recommended.
+              {/* Wellness Alerts (< 30% Score) */}
+              {notifications.length > 0 && (
+                <div className="space-y-3">
+                  {notifications.map((n) => (
+                    <div key={n._id} className="rounded-2xl border border-red-300 bg-red-50 p-5 shadow-soft">
+                      <div className="flex items-start gap-4">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-xl text-red-700">
+                          🚨
                         </span>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-display text-lg font-semibold text-red-900">
+                              Wellness Alert — Score Below 30%
+                            </h3>
+                            <button
+                              onClick={() => handleDismissNotification(n._id)}
+                              className="font-body text-xs font-semibold text-red-800 hover:text-red-900 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg border border-red-300 transition"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                          <p className="mt-1 font-body text-sm font-medium text-red-800">
+                            {n.message || "A student under your care has received a wellness score below 30%. Please review the student's wellness result."}
+                          </p>
+                          <div className="mt-3 flex items-center gap-3">
+                            {n.studentId?._id && (
+                              <Link
+                                to={`/counsellor/student/${n.studentId._id}`}
+                                className="btn-primary !py-1.5 !px-3 text-xs !bg-red-800 hover:!bg-red-900"
+                              >
+                                👤 View Student Profile
+                              </Link>
+                            )}
+                            {n.studentId?.name && (
+                              <span className="font-body text-xs text-red-700 font-semibold">
+                                Student: {n.studentId.name} ({n.studentId.department || "General"})
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard label="Today's appointments" value={summary.todayAppointments ?? 0} accent="sunrise" />

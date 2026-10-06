@@ -11,8 +11,12 @@ export const getAssessmentQuestions = () => api.get("/student/assessment/questio
 export const submitAssessment = (responses) => api.post("/student/assessment", { responses }).then((r) => r.data);
 export const getAssessmentHistory = () => api.get("/student/assessment-history").then((r) => r.data);
 
-export const submitFeedback = (appointmentId, rating, comment) =>
-  api.post("/student/feedback", { appointmentId, rating, comment }).then((r) => r.data);
+export const submitFeedback = (appointmentIdOrPayload, rating, comment) => {
+  if (typeof appointmentIdOrPayload === "object" && appointmentIdOrPayload !== null) {
+    return api.post("/student/feedback", appointmentIdOrPayload).then((r) => r.data);
+  }
+  return api.post("/student/feedback", { appointmentId: appointmentIdOrPayload, rating, comment }).then((r) => r.data);
+};
 export const getPendingFeedback = () => api.get("/student/pending-feedback").then((r) => r.data);
 
 export const getUnreadNotifications = () => api.get("/student/notifications").then((r) => r.data);
