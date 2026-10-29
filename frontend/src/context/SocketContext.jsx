@@ -8,6 +8,16 @@ export const useSocket = () => {
   return useContext(SocketContext);
 };
 
+/**
+ * Derive the base server URL (without /api suffix) for Socket.io connections.
+ * VITE_API_URL typically ends with /api (e.g. https://mindcare-api.onrender.com/api)
+ * but Socket.io must connect to the server root (e.g. https://mindcare-api.onrender.com).
+ */
+const getSocketBaseUrl = () => {
+  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  return apiUrl.replace(/\/api\/?$/, "");
+};
+
 export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
   const [socket, setSocket] = useState(null);
@@ -22,22 +32,25 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    const token = localStorage.getItem("token"); // Assuming standard token storage, fallback to your auth logic
+    const token = localStorage.getItem("mindcare_token");
     
     // Check if token exists before connecting
     if (!token) return;
 
-    const newSocket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
+    const socketUrl = getSocketBaseUrl();
+
+    const newSocket = io(socketUrl, {
       auth: { token },
       transports: ["websocket", "polling"],
     });
 
     setSocket(newSocket);
 
-    // Initial unread fetch
+    // Initial unread fetch — use the API URL (already includes /api)
     const fetchUnreadCount = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/chat/unread-count`, {
+        const apiBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+        const response = await fetch(`${apiBaseUrl}/chat/unread-count`, {
           headers: {
             "Authorization": `Bearer ${token}`
           }

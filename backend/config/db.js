@@ -90,9 +90,16 @@ const connectDB = async () => {
     }
   }
 
-  // Attempt 3: In-Memory MongoDB Server (Zero-Config Fallback)
+  // Attempt 3: In-Memory MongoDB Server (Development-only zero-config fallback)
+  if (process.env.NODE_ENV === "production") {
+    console.error(`[DB Error] All MongoDB connection attempts failed in PRODUCTION mode.`);
+    console.error(`[DB Error] Ensure MONGO_URI is set correctly in environment variables.`);
+    console.error(`[DB Error] In-memory fallback is disabled in production.`);
+    process.exit(1);
+  }
+
   try {
-    console.log(`[DB] Initializing zero-config In-Memory MongoDB Server...`);
+    console.log(`[DB] Initializing zero-config In-Memory MongoDB Server (development only)...`);
     const { MongoMemoryServer } = require("mongodb-memory-server");
     memoryServer = await MongoMemoryServer.create({
       binary: { version: "7.0.14" },
