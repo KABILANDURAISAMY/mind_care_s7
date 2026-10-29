@@ -27,6 +27,7 @@ const Notification = require("../backend/models/Notification");
 const WellnessFAQ = require("../backend/models/WellnessFAQ");
 const { WELLNESS_QUESTIONS } = require("../backend/utils/wellnessQuestions");
 const { wellnessQAData } = require("./qaData");
+const { enrichCounsellorData } = require("./enrichCounsellorData");
 
 // Helper date functions (strictly past dates: daysAgo >= 1)
 function getPastDateStr(daysAgo) {
@@ -493,6 +494,9 @@ async function seedHistoricalData(options = {}) {
   // 8. WELLNESS FAQ SEEDING
   await WellnessFAQ.insertMany(wellnessQAData);
   console.log(`[Historical Seed] Inserted ${wellnessQAData.length} Wellness FAQ entries.`);
+
+  // 9. ENRICH COUNSELLOR DATA (Comprehensive realistic appointments & feedbacks)
+  await enrichCounsellorData();
 
   console.log("\n========================================================");
   console.log("[Historical Seed] SEEDING COMPLETE SUCCESSFULLY!");
